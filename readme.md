@@ -1,6 +1,8 @@
-# Reverse Engineering AI Assistant
+# AI-Assisted Reverse Engineering with Ghidra
 
-Uses a headless Ghidra analysis results exposed as REST API
+This tool gives security researchers an AI chat interface that can drive Ghidra through MCP, letting them ask high-level questions about a binary instead of digging manually. The agentic workflow automatically performs the required reverse-engineering steps inside Ghidra to produce answers.
+
+#### Uses a headless Ghidra analysis results exposed as REST API
 
 ```bash
 docker run --rm -p 9090:9090 -v $(pwd)/data:/data/ghidra_projects biniamfd/ghidra-headless-rest:latest
@@ -18,4 +20,7 @@ python webui/app.py
 ```
 
 Then access the service at http://localhost:5000
+
+
+https://github.com/user-attachments/assets/77f1645a-cd8e-470f-826b-585a73e48bf4
 
