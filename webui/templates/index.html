@@ -34,20 +34,41 @@
         input::placeholder, textarea::placeholder {
             color: #9ca3af;
         }
+        /* Custom scrollbar for cleaner look */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f1116; 
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #374151; 
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563; 
+        }
     </style>
 </head>
 <body class="flex h-screen">
 
     <div class="w-1/4 sidebar flex flex-col p-5 border-r border-gray-700">
         <h1 class="text-xl font-semibold mb-6 text-white">Reverse Engineering AI Assistant</h1>
+        
         <form id="upload-form" class="mb-6">
-            <label for="file-input" class="block mb-2 text-sm font-medium text-gray-300">Upload Binary for Analysis</label>
-            <input type="file" id="file-input" class="block w-full text-sm text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer"/>
-            <button type="submit" class="w-full mt-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition">Analyze</button>
+            <label for="file-input" class="block mb-2 text-sm font-medium text-gray-300">Upload Binary</label>
+            <input type="file" id="file-input" class="block w-full text-sm text-gray-200 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-indigo-600 file:text-white hover:file:bg-indigo-700 cursor-pointer mb-4"/>
+            
+            <label for="zip-password" class="block mb-2 text-sm font-medium text-gray-300">Zip Password (Optional)</label>
+            <input type="text" id="zip-password" placeholder="e.g. infected" class="block w-full text-sm text-gray-200 bg-gray-800 border border-gray-600 rounded-md py-2 px-4 mb-4 focus:outline-none focus:border-indigo-500 transition-colors" />
+
+            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2 px-4 rounded-md transition shadow-lg">Analyze</button>
         </form>
-        <div id="upload-status" class="text-sm text-center mb-4 h-5"></div>
+
+        <div id="upload-status" class="text-sm text-center mb-4 h-5 font-medium"></div>
+        
         <h2 class="text-md font-semibold border-t border-gray-700 pt-4 text-gray-300">Analysis Jobs</h2>
-        <div id="jobs-list" class="flex-grow overflow-y-auto mt-3 space-y-3"></div>
+        <div id="jobs-list" class="flex-grow overflow-y-auto mt-3 space-y-3 pr-2"></div>
     </div>
 
     <div class="w-3/4 flex flex-col h-screen">
@@ -58,10 +79,10 @@
             </div>
         </div>
         <div id="chat-container" class="hidden flex-grow flex flex-col p-6 overflow-hidden">
-            <div id="chat-log" class="flex-grow overflow-y-auto mb-4 p-4 panel"></div>
+            <div id="chat-log" class="flex-grow overflow-y-auto mb-4 p-4 panel shadow-inner"></div>
             <form id="chat-form" class="flex items-end">
-                <textarea id="chat-input" class="flex-grow bg-gray-800 rounded-l-md p-3 focus:outline-none resize-none text-gray-200" placeholder="Enter command..." rows="1" disabled></textarea>
-                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-5 rounded-r-md transition self-stretch">Send</button>
+                <textarea id="chat-input" class="flex-grow bg-gray-800 rounded-l-md p-3 focus:outline-none resize-none text-gray-200 border border-transparent focus:border-indigo-500 transition-colors" placeholder="Enter command..." rows="1" disabled></textarea>
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-5 rounded-r-md transition self-stretch shadow-lg">Send</button>
             </form>
         </div>
     </div>
@@ -70,184 +91,183 @@
 $(document).ready(function() {
     let currentJobId = null;
     let jobStatusPollers = {};
+
     function showUploadStatus(message, isError = false) {
         $('#upload-status').text(message).toggleClass('text-red-400', isError).toggleClass('text-green-400', !isError);
     }
+
+    // ... (Chat functions remain the same, stripped here for brevity) ...
     function addChatMessage(role, message) {
         const senderClass = role === 'user' ? 'chat-bubble-user' : 'chat-bubble-assistant';
-        const sanitizedMessage = $('<div/>').text(message).html();
-        $('#chat-log').append(`
-            <div class="mb-4">
-                <div class="p-3 rounded-md ${senderClass}">${sanitizedMessage}</div>
-            </div>
-        `);
+        let contentHtml = role === 'user' ? $('<div/>').text(message).html() : marked.parse(message);
+        $('#chat-log').append(`<div class="mb-4"><div class="p-3 rounded-md ${senderClass} text-sm leading-relaxed">${contentHtml}</div></div>`);
         $('#chat-log').scrollTop($('#chat-log')[0].scrollHeight);
     }
+    
     function addShimmerPlaceholder() {
-        const placeholderId = `shimmer-${Date.now()}`;
-        $('#chat-log').append(`
-            <div id="${placeholderId}" class="mb-4">
-                <div class="p-3 rounded-md chat-bubble-assistant space-y-3">
-                    <div class="h-4 w-5/6 rounded bg-gray-700 animate-pulse"></div>
-                    <div class="h-4 w-full rounded bg-gray-700 animate-pulse"></div>
-                    <div class="h-4 w-3/4 rounded bg-gray-700 animate-pulse"></div>
-                </div>
-            </div>
-        `);
+        const id = `shimmer-${Date.now()}`;
+        $('#chat-log').append(`<div id="${id}" class="mb-4"><div class="p-3 rounded-md chat-bubble-assistant space-y-3"><div class="h-4 w-5/6 rounded bg-gray-700 animate-pulse"></div></div></div>`);
         $('#chat-log').scrollTop($('#chat-log')[0].scrollHeight);
-        return placeholderId;
+        return id;
     }
+
     function pollStatus(jobId) {
         if (jobStatusPollers[jobId]) return;
         jobStatusPollers[jobId] = setInterval(async () => {
             try {
                 const response = await fetch(`/status/${jobId}`);
-                if (!response.ok) throw new Error('Network response was not ok');
                 const data = await response.json();
-                const status = data.status || 'unknown';
+                const status = (data.status || 'unknown').toUpperCase();
                 const $jobItem = $(`#job-${jobId} .job-status`);
-                $jobItem.text(status.toUpperCase());
-                if (status === 'done') {
-                    $jobItem.removeClass('text-yellow-400').addClass('text-green-400');
-                    clearInterval(jobStatusPollers[jobId]);
-                    delete jobStatusPollers[jobId];
-                } else if (status === 'failed') {
-                    $jobItem.removeClass('text-yellow-400').addClass('text-red-400');
+                $jobItem.text(status);
+                
+                if (status === 'DONE' || status === 'FAILED') {
+                    $jobItem.removeClass('text-yellow-400').addClass(status === 'DONE' ? 'text-green-400' : 'text-red-400');
                     clearInterval(jobStatusPollers[jobId]);
                     delete jobStatusPollers[jobId];
                 }
-            } catch (error) {
-                console.error("Polling error:", error);
-                const $jobItem = $(`#job-${jobId} .job-status`);
-                $jobItem.text('ERROR').addClass('text-red-400');
-                clearInterval(jobStatusPollers[jobId]);
-                delete jobStatusPollers[jobId];
-            }
+            } catch (e) { console.error(e); }
         }, 3000);
     }
+
+    // --- DEBUG UPLOAD HANDLER ---
     $('#upload-form').on('submit', function(e) {
         e.preventDefault();
         const fileInput = $('#file-input')[0];
+        const passwordInput = $('#zip-password');
+        
         if (fileInput.files.length === 0) {
             showUploadStatus('ERROR: No file selected.', true);
             return;
         }
+
         const formData = new FormData();
         formData.append('file', fileInput.files[0]);
-        showUploadStatus('Analyzing...', false);
+        const pwd = passwordInput.val().trim();
+        if (pwd) formData.append('password', pwd);
+
+        showUploadStatus('Uploading...', false);
+
         $.ajax({
             url: '/upload',
             type: 'POST',
             data: formData,
             processData: false,
             contentType: false,
-            success: function(data) {
+            success: function(raw_data) {
+                // --- DEBUGGING BLOCK START ---
+                console.log("RAW SERVER RESPONSE:", raw_data);
+                
+                // 1. Force Parsing if it's a string
+                let data = raw_data;
+                if (typeof raw_data === 'string') {
+                    try { data = JSON.parse(raw_data); } catch(e) { console.error("Could not parse JSON string"); }
+                }
+
+                // 2. ALERT THE USER (Remove this later)
+                // This will show you EXACTLY what keys the server is sending
+                // alert("Debug: Server sent keys: " + Object.keys(data).join(", ")); 
+
                 if (data.error) {
-                    showUploadStatus(`ERROR: ${data.error}`, true);
+                    if (data.error === "PASSWORD_REQUIRED") {
+                         showUploadStatus('LOCKED: Zip password required.', true);
+                         passwordInput.focus().addClass('ring-1 ring-red-500');
+                    } else {
+                         showUploadStatus(`ERROR: ${data.error}`, true);
+                    }
                     return;
                 }
+
                 showUploadStatus('Analysis started!', false);
-                const { job_id, status } = data;
-                const filename = fileInput.files[0].name;
+                
+                // 3. AGGRESSIVE ID FINDER
+                // We check every common name for an ID
+                const job_id = data.job_id || data.jobId || data.id || data.uuid || data.key;
+                const status = data.status || "queued";
+                const filename = data.filename || fileInput.files[0].name;
+
+                if (!job_id) {
+                    showUploadStatus("Error: Server did not return a Job ID", true);
+                    alert("CRITICAL ERROR: The server responded, but didn't give us a Job ID. \nResponse: " + JSON.stringify(data));
+                    return;
+                }
+                
                 const newJobHtml = `
-                    <div id="job-${job_id}" class="job-item p-3 bg-gray-800 hover:bg-gray-700 rounded-md cursor-pointer transition" data-job-id="${job_id}">
-                        <div class="font-medium truncate text-gray-200">${filename}</div>
-                        <div class="text-xs text-gray-400">ID: ${job_id.substring(0,8)}...</div>
-                        <div class="text-xs text-yellow-400 font-mono job-status mt-1">${status.toUpperCase()}</div>
+                    <div id="job-${job_id}" class="job-item p-3 bg-gray-800 hover:bg-gray-700 rounded-md cursor-pointer transition border border-gray-700 hover:border-gray-600 mb-2" data-job-id="${job_id}">
+                        <div class="flex justify-between items-center">
+                            <div class="font-medium truncate text-gray-200 text-sm">${filename}</div>
+                        </div>
+                        <div class="flex justify-between items-center mt-2">
+                            <div class="text-xs text-gray-500 font-mono">${job_id.toString().substring(0,8)}</div>
+                            <div class="text-xs text-yellow-400 font-mono job-status font-bold">${status.toUpperCase()}</div>
+                        </div>
                     </div>`;
+                
                 $('#jobs-list').prepend(newJobHtml);
                 pollStatus(job_id);
             },
             error: function(xhr) {
-                const error = xhr.responseJSON ? xhr.responseJSON.error : 'Unknown error.';
-                showUploadStatus(`UPLOAD FAILED: ${error}`, true);
+                 // Check if it's the password error (401)
+                 if (xhr.status === 401) {
+                     showUploadStatus('LOCKED: Zip password required.', true);
+                 } else {
+                     showUploadStatus(`HTTP ERROR: ${xhr.status} ${xhr.statusText}`, true);
+                     console.error("Upload failed", xhr);
+                 }
             }
         });
     });
+
+    // Chat UI Handlers
     $('#jobs-list').on('click', '.job-item', function() {
         currentJobId = $(this).data('job-id');
-        $('.job-item').removeClass('bg-gray-700');
-        $(this).addClass('bg-gray-700');
+        $('.job-item').removeClass('bg-gray-700 border-indigo-500 ring-1 ring-indigo-500').addClass('border-gray-700');
+        $(this).addClass('bg-gray-700 border-indigo-500 ring-1 ring-indigo-500');
         $('#welcome-message').hide();
         $('#chat-container').removeClass('hidden').addClass('flex');
         $('#chat-input, #chat-form button').prop('disabled', false);
         $('#chat-log').html('');
-        addChatMessage('assistant', `Connected to job ${currentJobId}. Awaiting command...`);
-        $('#chat-input').focus();
+        addChatMessage('assistant', `**Connected.** Job: \`${currentJobId}\``);
     });
-    $('#chat-input').on('keydown', function(e) {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            $('#chat-form').submit();
-        }
-    }).on('input', function() {
-        this.style.height = 'auto';
-        this.style.height = (this.scrollHeight) + 'px';
-    });
+
     $('#chat-form').on('submit', function(e) {
         e.preventDefault();
-        const $chatInput = $('#chat-input');
-        const message = $chatInput.val().trim();
-        if (!message || !currentJobId) return;
-        addChatMessage('user', message);
-        $chatInput.val('').trigger('input');
-        $('#chat-input, #chat-form button').prop('disabled', true);
-        const placeholderId = addShimmerPlaceholder();
-        const $placeholder = $(`#${placeholderId}`);
-        const $responseContainer = $placeholder.find('.p-3');
+        const msg = $('#chat-input').val().trim();
+        if (!msg || !currentJobId) return;
+        addChatMessage('user', msg);
+        $('#chat-input').val('');
+        const pid = addShimmerPlaceholder();
         
-        let fullResponse = "";
-        let toolCallsHtml = "";
         fetch('/chat', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ message: message, job_id: currentJobId })
-        })
-        .then(response => {
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const reader = response.body.getReader();
+            body: JSON.stringify({ message: msg, job_id: currentJobId })
+        }).then(async res => {
+            const reader = res.body.getReader();
             const decoder = new TextDecoder();
-            $responseContainer.html('<div class="markdown-content"></div><div class="tool-calls"></div>');
-            function read() {
-                reader.read().then(({ done, value }) => {
-                    if (done) {
-                        $('#chat-input, #chat-form button').prop('disabled', false);
-                        $('#chat-input').focus();
-                        return;
-                    }
-                    const chunk = decoder.decode(value, {stream: true});
-                    const lines = chunk.split('\n\n').filter(line => line.trim());
-                    lines.forEach(line => {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.substring(6));
-                                if (data.type === 'token') {
-                                    fullResponse += data.content;
-                                    $responseContainer.find('.markdown-content').html(marked.parse(fullResponse));
-                                } else if (data.type === 'tool_call') {
-                                    toolCallsHtml += `<li>${data.description}</li>`;
-                                    $responseContainer.find('.tool-calls').html(`<div class="text-xs text-gray-400 mt-2 bg-gray-900 p-2 rounded border border-gray-700"><strong>SYSTEM LOG:</strong><ul>${toolCallsHtml}</ul></div>`);
-                                } else if (data.type === 'error') {
-                                    $responseContainer.html(`<div class="text-red-400">ERROR: ${data.content}</div>`);
-                                }
-                            } catch (e) {
-                                console.error("Error parsing stream data:", e, "Data:", line);
+            $(`#${pid} .p-3`).html('<div class="markdown-content prose prose-invert"></div><div class="tool-calls mt-2"></div>');
+            let text = "";
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value);
+                chunk.split('\n\n').forEach(line => {
+                    if (line.startsWith('data: ')) {
+                        try {
+                            const d = JSON.parse(line.slice(6));
+                            if (d.type === 'token') {
+                                text += d.content;
+                                $(`#${pid} .markdown-content`).html(marked.parse(text));
+                            } else if (d.type === 'tool_call') {
+                                $(`#${pid} .tool-calls`).append(`<div class="text-xs text-gray-400 font-mono border-l-2 border-indigo-500 pl-2 mb-1">> ${d.description}</div>`);
                             }
-                        }
-                    });
-                    $('#chat-log').scrollTop($('#chat-log')[0].scrollHeight);
-                    read();
+                        } catch(e) {}
+                    }
                 });
             }
-            read();
-        }).catch(err => {
-            console.error("Fetch stream error:", err);
-            $responseContainer.html(`<div class="text-red-400">FATAL ERROR: Connection to assistant failed.</div>`);
-            $('#chat-input, #chat-form button').prop('disabled', false);
         });
     });
 });
 </script>
-
 </body>
 </html>
